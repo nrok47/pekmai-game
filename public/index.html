@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="th">
+<head>
+<title>เป้กไหม สำรับจั่ว</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one column. Big card centred, draw button under it, history and deck settings below. Dark-first would hide the card colours, so the page is a quiet neutral and the cards carry all the colour. */
+:root {
+  --bg: #F2EFE8;
+  --surface: #FFFDF6;
+  --fg: #1F1F1F;
+  --muted: #5B5A55;
+  --line: #D9D4C7;
+  --accent: #8DB63C;
+  --accent-ink: #1F2A06;
+  --warn: #B3261E;
+  --font: 'Kanit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17170F; --surface: #22221A; --fg: #F3F1E8; --muted: #AFAC9F; --line: #3A3A2E;
+    --accent: #B9DA5A; --accent-ink: #1B2504; --warn: #FF8A80; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17170F; --surface: #22221A; --fg: #F3F1E8; --muted: #AFAC9F; --line: #3A3A2E;
+  --accent: #B9DA5A; --accent-ink: #1B2504; --warn: #FF8A80; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.5;
+  padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+h1 { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.1; }
+.chip { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--surface); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.dot.on { background: var(--accent); }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 150px; }
+.field label { font-size: 13px; color: var(--muted); }
+.field input { min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); min-width: 0; }
+.btn { min-height: 44px; padding: 8px 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 500; }
+.btn.primary { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.cardwrap { container-type: inline-size; width: min(100%, 330px); }
+.pcard {
+  aspect-ratio: 63 / 88; border-radius: 5cqw; padding: 5.7cqw; color: #fff; display: flex; flex-direction: column;
+  box-shadow: 0 2px 14px rgba(0,0,0,.25); overflow: hidden;
+}
+.pcard.pop { animation: pop .35s ease-out; }
+@keyframes pop { from { transform: translateY(14px) scale(.96); opacity: .2; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pcard.pop { animation: none; } }
+.pcard .num { width: 14cqw; height: 14cqw; border-radius: 50%; border: .9cqw solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 6.3cqw; font-weight: 700; }
+.pcard .top { display: flex; justify-content: space-between; align-items: center; }
+.pcard .tag { font-size: 4.4cqw; font-weight: 600; color: #1F1F1F; background: #F2C14E; border-radius: 999px; padding: 1cqw 3.6cqw; }
+.pcard .mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4.4cqw; text-align: center; }
+.pcard .title { font-size: 15cqw; font-weight: 700; line-height: 1.1; }
+.pcard .title.long { font-size: 12cqw; }
+.pcard .line { font-size: 6.7cqw; font-weight: 500; line-height: 1.45; }
+.pcard .foot { display: flex; justify-content: center; align-items: center; gap: 2.5cqw; font-size: 4.4cqw; font-weight: 500; padding-top: 3cqw; border-top: .6cqw solid rgba(255,255,255,.35); }
+.pcard .pip { width: 4.4cqw; height: 4.4cqw; border-radius: 50%; background: #B9DA5A; border: .6cqw solid #5E8C1F; }
+.pcard.gold { background: #1F1F1F; color: #F2C14E; border: 1.3cqw solid #F2C14E; padding: 4.4cqw; }
+.pcard.gold .line { color: #FFF4D6; }
+.pcard.gold .foot { border-top-color: rgba(242,193,78,.5); }
+.pcard.back { background: #1F1F1F; align-items: center; justify-content: center; gap: 7cqw; }
+.pcard.back .big { font-size: 16.5cqw; font-weight: 700; line-height: 1; }
+.pcard.back .sub { font-size: 5cqw; color: #D8D8D8; }
+.who { font-size: 14px; color: var(--muted); min-height: 21px; text-align: center; }
+.draw { width: min(100%, 330px); min-height: 60px; font-size: 22px; }
+.status { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+section.box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.hist { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.hist li { display: flex; align-items: center; gap: 10px; font-size: 15px; min-width: 0; }
+.sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.hist .nm { font-weight: 500; }
+.hist .by { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.empty { color: var(--muted); font-size: 14px; margin: 0; }
+
+details > summary { cursor: pointer; font-size: 18px; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.quick span { font-size: 14px; color: var(--muted); }
+.rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.rows li { display: grid; grid-template-columns: 14px 28px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 4px 0; border-top: 1px solid var(--line); }
+.rows li:first-child { border-top: 0; }
+.rows .n { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rows .name { font-weight: 500; overflow-wrap: anywhere; }
+.step { display: inline-flex; align-items: center; gap: 4px; }
+.step button { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 22px; line-height: 1; }
+.step output { min-width: 28px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.note { font-size: 14px; color: var(--warn); margin: 0; }
+.total { font-size: 15px; font-variant-numeric: tabular-nums; }
+</style>
+
+</head>
+<body>
+<main>
+  <header>
+    <h1>เป้กไหม · สำรับจั่ว</h1>
+    <span class="chip" id="net"><span class="dot" id="netdot"></span><span id="nettxt">กำลังเชื่อมต่อ</span></span>
+  </header>
+
+  <section class="box" aria-label="ห้องและชื่อ">
+    <div class="row">
+      <div class="field"><label for="room">รหัสห้อง (ตัวอักษรอังกฤษ/ตัวเลข)</label><input id="room" maxlength="12" autocomplete="off" spellcheck="false"></div>
+      <div class="field"><label for="who">ชื่อของคุณ</label><input id="who" maxlength="16" autocomplete="off" placeholder="เช่น โหน่ง"></div>
+      <button class="btn" id="join" type="button" style="align-self:flex-end">เข้าห้อง</button>
+    </div>
+  </section>
+
+  <div class="stage">
+    <div class="cardwrap" id="face"></div>
+    <div class="who" id="who-line" aria-live="polite"></div>
+    <button class="btn primary draw" id="draw" type="button">จั่ว</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <section class="box">
+    <h2>ใบที่เปิดไปแล้ว</h2>
+    <ul class="hist" id="hist"></ul>
+    <p class="empty" id="hist-empty">ยังไม่มีใครจั่ว</p>
+  </section>
+
+  <section class="box">
+    <details id="cfg">
+      <summary>ตั้งจำนวนใบของแต่ละแบบ</summary>
+      <div style="display:flex;flex-direction:column;gap:12px;padding-top:8px">
+        <div class="quick">
+          <span>ตั้งทุกแบบ</span>
+          <button class="btn" type="button" data-all="1">1 ใบ</button>
+          <button class="btn" type="button" data-all="2">2 ใบ</button>
+          <button class="btn" type="button" data-all="3">3 ใบ</button>
+          <button class="btn" type="button" data-all="def">ค่าเริ่มต้น</button>
+        </div>
+        <ul class="rows" id="rows"></ul>
+        <div class="row" style="justify-content:space-between">
+          <span class="total" id="total"></span>
+          <button class="btn primary" id="shuffle" type="button">สับสำรับใหม่</button>
+        </div>
+        <p class="note" id="stale" hidden>จำนวนที่แก้ยังไม่ถูกใช้ กด "สับสำรับใหม่" เพื่อเริ่มกองใหม่ ใบที่จั่วไปแล้วจะถูกล้าง</p>
+      </div>
+    </details>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+
+</body>
+</html>
