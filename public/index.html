@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chonburi&family=Kanit:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: one column. Big card centred, draw button under it, history and deck settings below. Dark-first would hide the card colours, so the page is a quiet neutral and the cards carry all the colour. */
+/* Layout: โต๊ะเกม ซ้าย = รายชื่อผู้เล่น (เรียงตามที่นั่ง) ขวา = กองไพ่ + ใบที่จั่ว บนมือถือแคบลงเหลือแต่ avatar */
 :root {
   --bg: #F2EFE8;
   --surface: #FFFDF6;
@@ -17,17 +17,19 @@
   --accent: #8DB63C;
   --accent-ink: #1F2A06;
   --warn: #B3261E;
+  --felt: #1E4D2B;
+  --felt-hi: #2E6B3E;
   --font: 'Kanit', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #17170F; --surface: #22221A; --fg: #F3F1E8; --muted: #AFAC9F; --line: #3A3A2E;
-    --accent: #B9DA5A; --accent-ink: #1B2504; --warn: #FF8A80; color-scheme: dark;
+    --accent: #B9DA5A; --accent-ink: #1B2504; --warn: #FF8A80; --felt: #173A21; --felt-hi: #225230; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #17170F; --surface: #22221A; --fg: #F3F1E8; --muted: #AFAC9F; --line: #3A3A2E;
-  --accent: #B9DA5A; --accent-ink: #1B2504; --warn: #FF8A80; color-scheme: dark;
+  --accent: #B9DA5A; --accent-ink: #1B2504; --warn: #FF8A80; --felt: #173A21; --felt-hi: #225230; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -37,11 +39,11 @@ body {
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+main { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 h1 { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.1; }
-.chip { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--surface); }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.chip { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; background: var(--surface); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.on { background: var(--accent); }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -53,10 +55,49 @@ button { cursor: pointer; }
 .btn { min-height: 44px; padding: 8px 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 500; }
 .btn.primary { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+section.box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+h2 { margin: 0; font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 
-.stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.cardwrap { container-type: inline-size; width: min(100%, 330px); }
-.pcard { position: relative; aspect-ratio: 63 / 88; border-radius: 5.1cqw; overflow: hidden; background: #F1E6C8; box-shadow: 0 2px 14px rgba(0,0,0,.25); }
+/* โต๊ะเกม */
+.game { display: grid; grid-template-columns: minmax(170px, 240px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.players { padding: 12px; gap: 10px; }
+.players h2 { font-size: 16px; }
+.dir { font-size: 13px; color: var(--muted); }
+.seats { display: flex; flex-direction: column; gap: 8px; }
+.seat { position: relative; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--bg); min-width: 0; }
+.avatar { position: relative; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; flex: none; }
+.avatar .dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border: 2px solid var(--bg); }
+.seat .nm { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat.now { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.seat.now .nm { font-weight: 700; }
+.seat.off { opacity: .55; }
+.seat.me .nm::after { content: " (คุณ)"; color: var(--muted); font-weight: 400; }
+.seat .tag { font-size: 11px; font-weight: 700; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 1px 8px; flex: none; }
+.seat .x { min-width: 28px; min-height: 28px; border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 50%; flex: none; }
+
+.table {
+  background: radial-gradient(ellipse at 50% 28%, var(--felt-hi), var(--felt) 70%);
+  border: 1px solid rgba(0,0,0,.3); border-radius: 18px; padding: 16px; color: #F5F7EE;
+  display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 0;
+}
+.turn { width: 100%; text-align: center; font-size: 20px; font-weight: 700; padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.28); background: rgba(0,0,0,.28); }
+.turn.mine { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.board { display: grid; grid-template-columns: minmax(70px, 26%) minmax(0, 1fr); gap: 16px; width: 100%; align-items: center; max-width: 560px; }
+.pile { position: relative; aspect-ratio: 63 / 88; width: 100%; }
+.pile .sheet { position: absolute; inset: 0; border-radius: 6%; background: #1F1F1F url(/cards/back.jpg) center / cover; box-shadow: 0 2px 8px rgba(0,0,0,.45); }
+.pile .sheet:nth-child(1) { transform: translate(0, 0); }
+.pile .sheet:nth-child(2) { transform: translate(4px, -4px); }
+.pile .sheet:nth-child(3) { transform: translate(8px, -8px); }
+.pile .cnt { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); font-weight: 700; font-size: 18px; background: rgba(0,0,0,.65); color: #fff; border-radius: 999px; padding: 2px 12px; z-index: 2; white-space: nowrap; }
+.pile.empty .sheet { display: none; }
+.pile.empty { border: 2px dashed rgba(255,255,255,.4); border-radius: 6%; }
+.cardwrap { container-type: inline-size; width: 100%; max-width: 330px; justify-self: center; }
+.who { font-size: 14px; color: rgba(255,255,255,.85); min-height: 21px; text-align: center; }
+.draw { width: 100%; max-width: 360px; min-height: 60px; font-size: 22px; }
+.status { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.table .chip { background: rgba(0,0,0,.28); color: #fff; border-color: rgba(255,255,255,.25); }
+
+.pcard { position: relative; aspect-ratio: 63 / 88; border-radius: 5.1cqw; overflow: hidden; background: #F1E6C8; box-shadow: 0 2px 14px rgba(0,0,0,.35); }
 .pcard img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .pcard.wide { background: #FCF1D5; }
 .pcard.wide img { inset: auto; left: 0; top: 14.6cqw; height: auto; width: 100%; }
@@ -76,22 +117,7 @@ button { cursor: pointer; }
 .pcard.gold .p-bot { bottom: 11.4cqw; height: 37.8cqw; }
 .pcard.gold .p-line { left: 11.4cqw; right: 11.4cqw; bottom: 26.7cqw; }
 .pcard.gold .p-foot { left: 10.8cqw; right: 10.8cqw; bottom: 13.3cqw; }
-.turn { width: min(100%, 330px); text-align: center; font-size: 20px; font-weight: 700; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
-.turn.mine { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-.seats { display: flex; flex-wrap: wrap; gap: 8px; }
-.seat { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--bg); max-width: 100%; }
-.seat .nm { overflow-wrap: anywhere; }
-.seat.now { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); font-weight: 700; }
-.seat.off { opacity: .55; }
-.seat.me .nm::after { content: " (คุณ)"; color: var(--muted); font-weight: 400; }
-.seat .tag { font-size: 12px; font-weight: 700; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 1px 8px; }
-.seat .x { min-width: 28px; min-height: 28px; border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 50%; }
-.who { font-size: 14px; color: var(--muted); min-height: 21px; text-align: center; }
-.draw { width: min(100%, 330px); min-height: 60px; font-size: 22px; }
-.status { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 
-section.box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .hist { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .hist li { display: flex; align-items: center; gap: 10px; font-size: 15px; min-width: 0; }
 .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
@@ -112,8 +138,24 @@ details > summary { cursor: pointer; font-size: 18px; font-weight: 600; min-heig
 .step output { min-width: 28px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
 .note { font-size: 14px; color: var(--warn); margin: 0; }
 .total { font-size: 15px; font-variant-numeric: tabular-nums; }
-</style>
 
+/* มือถือ: คอลัมน์ซ้ายเหลือ avatar + ชื่อสั้น ให้ไพ่ขวากว้างพอให้อ่านกติกา */
+@media (max-width: 600px) {
+  .game { grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+  .players { padding: 8px; }
+  .players h2 { font-size: 13px; }
+  .players h2 .chip, .dir { display: none; }
+  .seat { flex-direction: column; text-align: center; gap: 4px; padding: 8px 4px; }
+  .seat .nm { font-size: 12px; width: 100%; flex: none; text-align: center; }
+  .seat.me .nm::after { content: ""; }
+  .seat .tag { display: none; }
+  .seat .x { position: absolute; top: 0; right: 0; }
+  .table { padding: 10px; gap: 10px; }
+  .turn { font-size: 16px; padding: 6px 8px; }
+  .board { grid-template-columns: minmax(0, 1fr); }
+  .pile { display: none; }
+}
+</style>
 </head>
 <body>
 <main>
@@ -130,19 +172,25 @@ details > summary { cursor: pointer; font-size: 18px; font-weight: 600; min-heig
     </div>
   </section>
 
-  <div class="stage">
-    <div class="turn" id="turn" aria-live="polite">รอเริ่มเกม</div>
-    <div class="cardwrap" id="face"></div>
-    <div class="who" id="who-line" aria-live="polite"></div>
-    <button class="btn primary draw" id="draw" type="button">จั่ว</button>
-    <div class="status" id="status"></div>
-  </div>
+  <div class="game">
+    <aside class="box players" aria-label="ผู้เล่น">
+      <h2><span>ผู้เล่น</span> <span class="chip" id="seatcount">0</span></h2>
+      <div class="dir" id="dir"></div>
+      <div class="seats" id="seats"></div>
+      <button class="btn" id="skip" type="button" hidden>ข้ามตานี้</button>
+    </aside>
 
-  <section class="box">
-    <h2>คนในห้อง <span class="chip" id="seatcount">0</span></h2>
-    <div class="seats" id="seats"></div>
-    <div class="row"><button class="btn" id="skip" type="button" hidden>ข้ามตานี้</button></div>
-  </section>
+    <div class="table">
+      <div class="turn" id="turn" aria-live="polite">รอเริ่มเกม</div>
+      <div class="board">
+        <div class="pile" id="pile" aria-hidden="true"><div class="sheet"></div><div class="sheet"></div><div class="sheet"></div><span class="cnt" id="pilecnt"></span></div>
+        <div class="cardwrap" id="face"></div>
+      </div>
+      <div class="who" id="who-line" aria-live="polite"></div>
+      <button class="btn primary draw" id="draw" type="button">จั่ว</button>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
 
   <section class="box">
     <h2>ใบที่เปิดไปแล้ว</h2>

@@ -43,6 +43,8 @@
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} return null; }
   function cleanRoom(v) { return (v || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 12).toUpperCase(); }
   function who() { return ($('who').value || '').trim().slice(0, 16); }
+  var AVATARS = ['#B3261E', '#2B6CB0', '#6B46C1', '#2F7D32', '#B26A00', '#00796B', '#AD1457', '#455A64'];
+  function avatarColor(id) { var h = 0; for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return AVATARS[h % AVATARS.length]; }
   function vis(s) { return s.replace(/[ัิ-ฺ็-๎]/g, '').length; }
 
   // รหัสประจำเครื่อง ใช้แยกคนที่ชื่อซ้ำกัน และจำที่นั่งตอนต่อใหม่
@@ -82,6 +84,9 @@
     var turnSeat = s ? seatOf(s.turnId) : null;
     var myTurn = !!(s && s.turnId === MYID);
 
+    var pile = $('pile');
+    pile.className = 'pile' + (started && left > 0 ? '' : ' empty');
+    $('pilecnt').textContent = started && left > 0 ? left + ' ใบ' : '';
     $('face').innerHTML = s && s.cur ? cardHTML(BYID[s.cur], s.seq !== lastSeq) : BACK;
     lastSeq = s ? s.seq : -1;
     $('who-line').textContent = s && s.cur && s.by ? 'เปิดโดย ' + s.by : '';
@@ -110,14 +115,17 @@
     // คนในห้อง
     var seatsEl = $('seats'); seatsEl.innerHTML = '';
     var seats = s ? s.seats : [];
-    $('seatcount').textContent = online.length + ' ออนไลน์ / ' + seats.length + ' ที่นั่ง';
+    $('seatcount').textContent = online.length + '/' + seats.length + ' ออนไลน์';
+    $('dir').textContent = started ? (s.dir === -1 ? 'ลำดับตา: ย้อนขึ้นไปด้านบน ↑' : 'ลำดับตา: ลงไปด้านล่าง ↓') : '';
     seats.forEach(function (p) {
-      var el = document.createElement('span');
+      var el = document.createElement('div');
       var on = isOn(p.id);
       el.className = 'seat' + (s && s.turnId === p.id && started ? ' now' : '') + (on ? '' : ' off') + (p.id === MYID ? ' me' : '');
-      var dot = document.createElement('span'); dot.className = 'dot' + (on ? ' on' : '');
-      var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name;
-      el.appendChild(dot); el.appendChild(nm);
+      var av = document.createElement('span'); av.className = 'avatar'; av.style.background = avatarColor(p.id);
+      av.appendChild(document.createTextNode((Array.from(p.name)[0] || '?').toUpperCase()));
+      var dot = document.createElement('span'); dot.className = 'dot' + (on ? ' on' : ''); av.appendChild(dot);
+      var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name; nm.title = p.name;
+      el.appendChild(av); el.appendChild(nm);
       if (s && s.turnId === p.id && started) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'ตานี้'; el.appendChild(tg); }
       if (!on && p.id !== MYID) {
         var x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×';
