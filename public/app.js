@@ -118,21 +118,54 @@
     $('seatcount').textContent = online.length + '/' + seats.length + ' ออนไลน์';
     $('dir').textContent = started ? (s.dir === -1 ? 'ลำดับตา: ย้อนขึ้นไปด้านบน ↑' : 'ลำดับตา: ลงไปด้านล่าง ↓') : '';
     seats.forEach(function (p) {
-      var el = document.createElement('div');
+      var st = (s && s.stat && s.stat[p.id]) || { drinks: 0, lemon: 0, status: [], hold: [] };
       var on = isOn(p.id);
-      el.className = 'seat' + (s && s.turnId === p.id && started ? ' now' : '') + (on ? '' : ' off') + (p.id === MYID ? ' me' : '');
+      var isNow = !!(s && s.turnId === p.id && started);
+      var mine = p.id === MYID;
+      var el = document.createElement('div');
+      el.className = 'seat' + (isNow ? ' now' : '') + (on ? '' : ' off') + (mine ? ' me' : '');
+      var top = document.createElement('div'); top.className = 'srow';
       var av = document.createElement('span'); av.className = 'avatar'; av.style.background = avatarColor(p.id);
       av.appendChild(document.createTextNode((Array.from(p.name)[0] || '?').toUpperCase()));
       var dot = document.createElement('span'); dot.className = 'dot' + (on ? ' on' : ''); av.appendChild(dot);
       var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name; nm.title = p.name;
-      el.appendChild(av); el.appendChild(nm);
-      if (s && s.turnId === p.id && started) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'ตานี้'; el.appendChild(tg); }
-      if (!on && p.id !== MYID) {
+      top.appendChild(av); top.appendChild(nm);
+      if (isNow) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'ตานี้'; top.appendChild(tg); }
+      if (!on && !mine) {
         var x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×';
-        x.setAttribute('aria-label', 'เอา ' + p.name + ' ออกจากห้อง'); x.setAttribute('data-remove', p.id); el.appendChild(x);
+        x.setAttribute('aria-label', 'เอา ' + p.name + ' ออกจากห้อง'); x.setAttribute('data-remove', p.id); top.appendChild(x);
       }
+      el.appendChild(top);
+      var cnts = document.createElement('div'); cnts.className = 'cnts';
+      [['drinks', 'เหล้า', 'drink'], ['lemon', 'มะนาว', 'lemon']].forEach(function (k) {
+        var b = document.createElement('span'); b.className = 'cnt';
+        var lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = k[1];
+        var num = document.createElement('b'); num.textContent = st[k[0]] || 0;
+        var minus = document.createElement('button'); minus.type = 'button'; minus.textContent = '−';
+        minus.setAttribute('data-drink', p.id + ':' + k[2] + ':-1'); minus.setAttribute('aria-label', 'ลด' + k[1] + ' ' + p.name);
+        var plus = document.createElement('button'); plus.type = 'button'; plus.textContent = '+';
+        plus.setAttribute('data-drink', p.id + ':' + k[2] + ':1'); plus.setAttribute('aria-label', 'เพิ่ม' + k[1] + ' ' + p.name);
+        b.appendChild(lab); b.appendChild(minus); b.appendChild(num); b.appendChild(plus); cnts.appendChild(b);
+      });
+      el.appendChild(cnts);
+      var chips = document.createElement('div'); chips.className = 'chips';
+      (st.status || []).forEach(function (cid) {
+        var c = BYID[cid]; if (!c) return;
+        var ch = document.createElement('span'); ch.className = 'sch'; ch.textContent = c.t; ch.title = c.l; chips.appendChild(ch);
+      });
+      (st.hold || []).forEach(function (cid) {
+        var c = BYID[cid]; if (!c) return;
+        var ch = document.createElement(mine ? 'button' : 'span'); ch.className = 'sch hold'; ch.title = c.l;
+        ch.textContent = (mine ? 'ใช้ ' : 'ถือ ') + c.t;
+        if (mine) { ch.type = 'button'; ch.setAttribute('data-use', cid); ch.setAttribute('aria-label', 'ใช้ ' + c.t + ' แล้วทิ้ง'); }
+        chips.appendChild(ch);
+      });
+      if (chips.children.length) el.appendChild(chips);
       seatsEl.appendChild(el);
     });
+    var rb = $('rulesbar'), rules = (s && s.rules) || [];
+    rb.hidden = rules.length === 0;
+    rb.textContent = rules.length ? 'กฎที่ใช้อยู่: ' + rules.map(function (cid) { return BYID[cid] ? BYID[cid].t : cid; }).join(' · ') : '';
     var sk = $('skip');
     var canSkip = !!(started && left > 0 && s.turnId && (myTurn || !isOn(s.turnId)));
     sk.hidden = !canSkip;
@@ -208,8 +241,19 @@
   $('shuffle').addEventListener('click', function () { send({ type: 'shuffle' }); });
   $('skip').addEventListener('click', function () { send({ type: 'skip' }); });
   $('seats').addEventListener('click', function (e) {
-    var b = e.target.closest && e.target.closest('[data-remove]'); if (!b) return;
-    send({ type: 'remove', target: b.getAttribute('data-remove') });
+    var t = e.target.closest && e.target.closest('button'); if (!t) return;
+    if (t.hasAttribute('data-remove')) { send({ type: 'remove', target: t.getAttribute('data-remove') }); return; }
+    if (t.hasAttribute('data-drink')) {
+      var q = t.getAttribute('data-drink').split(':');
+      send({ type: 'drink', target: q[0], kind: q[1], delta: +q[2] }); return;
+    }
+    if (t.hasAttribute('data-use')) send({ type: 'use', card: t.getAttribute('data-use') });
+  });
+  var rs = $('resetstats'), rsT = null;
+  rs.addEventListener('click', function () {
+    if (rs.dataset.arm) { send({ type: 'resetstats' }); rs.dataset.arm = ''; rs.textContent = 'ล้างตัวเลขดื่ม'; clearTimeout(rsT); return; }
+    rs.dataset.arm = '1'; rs.textContent = 'กดอีกครั้งเพื่อล้าง';
+    rsT = setTimeout(function () { rs.dataset.arm = ''; rs.textContent = 'ล้างตัวเลขดื่ม'; }, 3000);
   });
   $('rows').addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-step]'); if (!b) return;

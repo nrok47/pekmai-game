@@ -6,12 +6,16 @@ for (let i = 1; i <= 25; i++) IDS.push(String(i));
 IDS.push("R1", "R2");
 const MAX_PER_CARD = 8;
 const MAX_SEATS = 12;
+// การ์ดที่ให้สถานะติดตัวคนจั่วจนถึงรอบหน้า / ของที่เก็บไว้ใช้ / กฎที่ใช้ทั้งเกม
+const STATUS_CARDS = new Set(["11", "13", "14", "15", "16", "17", "22", "23", "24"]);
+const HOLD_CARDS = new Set(["8", "10", "19", "R1"]);
+const RULE_CARDS = new Set(["12", "18"]);
 
 const defaults = () => Object.fromEntries(IDS.map((id) => [id, id.startsWith("R") ? 1 : 2]));
 const sig = (counts) => IDS.map((id) => counts[id] || 0).join(",");
 const fresh = () => ({
   counts: defaults(), built: "", deck: [], drawn: [], cur: null, by: "", dir: 1, seq: 0, started: false,
-  seats: [], turnId: null,
+  seats: [], turnId: null, stat: {}, rules: [],
 });
 const cleanName = (s) => String(s || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 16);
 const cleanId = (s) => String(s || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
@@ -35,6 +39,8 @@ export class Room extends DurableObject {
       // ห้องเก่าที่เซฟไว้ก่อนมีการ์ดใหม่/ลำดับตา
       for (const id of IDS) if (s.counts[id] == null) s.counts[id] = id.startsWith("R") ? 1 : 2;
       s.seats = s.seats || [];
+      s.stat = s.stat || {};
+      s.rules = s.rules || [];
       if (s.turnId === undefined) s.turnId = null;
       this.s = s;
     });
@@ -81,6 +87,17 @@ export class Room extends DurableObject {
     this.broadcast();
   }
 
+  statOf(id) {
+    const st = (this.s.stat[id] = this.s.stat[id] || { drinks: 0, lemon: 0, status: [], hold: [] });
+    return st;
+  }
+
+  // ตาเป็นของ id: สถานะ "ถึงรอบหน้า" ของคนนั้นหมดอายุ
+  setTurn(id) {
+    this.s.turnId = id;
+    if (id && this.s.stat[id]) this.s.stat[id].status = [];
+  }
+
   // เลื่อนตาไปคนถัดไปที่ออนไลน์ ตามทิศปัจจุบัน
   advanceTurn() {
     const s = this.s;
@@ -91,7 +108,7 @@ export class Room extends DurableObject {
     if (i < 0) i = 0;
     for (let k = 1; k <= n; k++) {
       const j = (((i + k * s.dir) % n) + n) % n;
-      if (online.has(s.seats[j].id)) { s.turnId = s.seats[j].id; return; }
+      if (online.has(s.seats[j].id)) { this.setTurn(s.seats[j].id); return; }
     }
   }
 
@@ -100,7 +117,7 @@ export class Room extends DurableObject {
     const s = this.s;
     if (!s.seats.length) { s.turnId = null; return; }
     const online = new Set(this.onlineIds());
-    if (!s.seats.some((p) => p.id === s.turnId)) s.turnId = s.seats[0].id;
+    if (!s.seats.some((p) => p.id === s.turnId)) this.setTurn(s.seats[0].id);
     if (!online.has(s.turnId) && online.size) this.advanceTurn();
   }
 
@@ -128,7 +145,7 @@ export class Room extends DurableObject {
     const s = this.s;
     if (!this.seat(id, name)) return;
     const me = s.seats.find((p) => p.id === id);
-    if (!s.turnId) s.turnId = id;
+    if (!s.turnId) this.setTurn(id);
 
     if (m.type === "hello") {
       this.ensureTurn();
@@ -148,7 +165,9 @@ export class Room extends DurableObject {
     } else if (m.type === "shuffle") {
       const deck = shuffled(s.counts);
       if (!deck.length) return;
-      Object.assign(s, { deck, built: sig(s.counts), drawn: [], cur: null, by: "", dir: 1, started: true, seq: s.seq + 1, turnId: id });
+      Object.assign(s, { deck, built: sig(s.counts), drawn: [], cur: null, by: "", dir: 1, started: true, seq: s.seq + 1, rules: [] });
+      for (const k of Object.keys(s.stat)) { s.stat[k].status = []; s.stat[k].hold = []; }
+      this.setTurn(id);
       this.save();
     } else if (m.type === "draw") {
       const now = Date.now();
@@ -163,7 +182,27 @@ export class Room extends DurableObject {
       s.by = me.name;
       s.seq += 1;
       if (card === "20") s.dir = s.dir === -1 ? 1 : -1;
+      const st = this.statOf(id);
+      if (STATUS_CARDS.has(card) && !st.status.includes(card)) st.status.push(card);
+      if (HOLD_CARDS.has(card) && st.hold.length < 6) st.hold.push(card);
+      if (RULE_CARDS.has(card) && !s.rules.includes(card)) s.rules.push(card);
+      if (card === "R2") { s.rules = []; for (const k of Object.keys(s.stat)) s.stat[k].status = []; }
       this.advanceTurn();
+      this.save();
+    } else if (m.type === "drink") {
+      const target = cleanId(m.target);
+      if (s.seats.some((p) => p.id === target)) {
+        const st = this.statOf(target);
+        const key = m.kind === "lemon" ? "lemon" : "drinks";
+        st[key] = Math.max(0, Math.min(99, st[key] + (m.delta === -1 ? -1 : 1)));
+        this.save();
+      }
+    } else if (m.type === "use") {
+      const st = this.statOf(id);
+      const i = st.hold.indexOf(String(m.card));
+      if (i >= 0) { st.hold.splice(i, 1); this.save(); }
+    } else if (m.type === "resetstats") {
+      for (const k of Object.keys(s.stat)) { s.stat[k].drinks = 0; s.stat[k].lemon = 0; }
       this.save();
     } else if (m.type === "skip") {
       // ข้ามตา: เจ้าของตา หรือใครก็ได้ถ้าเจ้าของตาไม่อยู่
@@ -176,6 +215,7 @@ export class Room extends DurableObject {
         const wasTurn = s.turnId === target;
         if (wasTurn) this.advanceTurn();
         s.seats = s.seats.filter((p) => p.id !== target);
+        delete s.stat[target];
         if (wasTurn && s.turnId === target) s.turnId = s.seats[0] ? s.seats[0].id : null;
         this.save();
       }

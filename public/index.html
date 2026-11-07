@@ -75,6 +75,20 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; display: flex; align-items: c
 .seat .tag { font-size: 11px; font-weight: 700; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 1px 8px; flex: none; }
 .seat .x { min-width: 28px; min-height: 28px; border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 50%; flex: none; }
 
+.btn.small { min-height: 36px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
+.rulesbar { width: 100%; text-align: center; font-size: 14px; font-weight: 600; padding: 6px 12px; border-radius: 10px; background: rgba(242,193,78,.18); border: 1px solid rgba(242,193,78,.5); color: #FFE9A8; }
+.seat { flex-direction: column; align-items: stretch; gap: 6px; }
+.srow { display: flex; align-items: center; gap: 10px; min-width: 0; position: relative; }
+.cnts { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.cnt { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.cnt .lab { color: var(--muted); }
+.cnt b { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; font-size: 15px; }
+.cnt button { width: 26px; height: 26px; padding: 0; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 16px; line-height: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.sch { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #1F1F1F; color: #fff; border: 0; }
+.sch.hold { background: #2F7D32; cursor: default; }
+button.sch.hold { cursor: pointer; }
+
 .table {
   background: radial-gradient(ellipse at 50% 28%, var(--felt-hi), var(--felt) 70%);
   border: 1px solid rgba(0,0,0,.3); border-radius: 18px; padding: 16px; color: #F5F7EE;
@@ -145,11 +159,19 @@ details > summary { cursor: pointer; font-size: 18px; font-weight: 600; min-heig
   .players { padding: 8px; }
   .players h2 { font-size: 13px; }
   .players h2 .chip, .dir { display: none; }
-  .seat { flex-direction: column; text-align: center; gap: 4px; padding: 8px 4px; }
+  .seat { text-align: center; gap: 4px; padding: 8px 4px; }
+  .srow { flex-direction: column; gap: 4px; }
+  .cnts { flex-direction: column; align-items: center; gap: 2px; }
+  .cnt { flex-wrap: wrap; justify-content: center; font-size: 11px; gap: 2px; }
+  .cnt button { width: 22px; height: 22px; font-size: 14px; }
+  .cnt b { min-width: 14px; font-size: 13px; }
+  .cnt .lab { width: 100%; text-align: center; }
+  .chips { justify-content: center; }
+  .sch { font-size: 10px; padding: 1px 6px; }
   .seat .nm { font-size: 12px; width: 100%; flex: none; text-align: center; }
   .seat.me .nm::after { content: ""; }
   .seat .tag { display: none; }
-  .seat .x { position: absolute; top: 0; right: 0; }
+  .seat .x { position: absolute; top: -6px; right: -2px; }
   .table { padding: 10px; gap: 10px; }
   .turn { font-size: 16px; padding: 6px 8px; }
   .board { grid-template-columns: minmax(0, 1fr); }
@@ -178,10 +200,12 @@ details > summary { cursor: pointer; font-size: 18px; font-weight: 600; min-heig
       <div class="dir" id="dir"></div>
       <div class="seats" id="seats"></div>
       <button class="btn" id="skip" type="button" hidden>ข้ามตานี้</button>
+      <button class="btn small" id="resetstats" type="button">ล้างตัวเลขดื่ม</button>
     </aside>
 
     <div class="table">
       <div class="turn" id="turn" aria-live="polite">รอเริ่มเกม</div>
+      <div class="rulesbar" id="rulesbar" hidden></div>
       <div class="board">
         <div class="pile" id="pile" aria-hidden="true"><div class="sheet"></div><div class="sheet"></div><div class="sheet"></div><span class="cnt" id="pilecnt"></span></div>
         <div class="cardwrap" id="face"></div>
