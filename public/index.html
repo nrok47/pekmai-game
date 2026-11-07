@@ -104,6 +104,13 @@ button.sch.hold { cursor: pointer; }
 .lb .fill { display: block; height: 100%; border-radius: 999px; }
 .lb b { text-align: right; font-variant-numeric: tabular-nums; }
 
+.help { width: 100%; max-width: 560px; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.22); border-radius: 12px; padding: 8px 14px; font-size: 14px; color: rgba(255,255,255,.92); }
+.help summary { min-height: 36px; font-size: 15px; color: #fff; }
+.help p { margin: 8px 0 4px; }
+.help ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.help .hwarn { font-size: 13px; color: #FFB4AB; margin: 8px 0 4px; }
+.help .hnote { font-size: 13px; color: #FFE9A8; }
+
 .table {
   background: radial-gradient(ellipse at 50% 28%, var(--felt-hi), var(--felt) 70%);
   border: 1px solid rgba(0,0,0,.3); border-radius: 18px; padding: 16px; color: #F5F7EE;
@@ -229,6 +236,24 @@ details > summary { cursor: pointer; font-size: 18px; font-weight: 600; min-heig
       <div class="result" id="result" aria-live="polite" hidden></div>
       <button class="btn primary draw" id="draw" type="button">จั่ว</button>
       <div class="status" id="status"></div>
+      <details class="help" open>
+        <summary>วิธีนับเป้ก (อ่านก่อนเล่น)</summary>
+        <p><b>ระบบนับให้อัตโนมัติ</b></p>
+        <ul>
+          <li><b>ดื่ม</b> คนจั่ว +1 เป้ก</li>
+          <li><b>ซ้าย</b> คนก่อนหน้าในรายชื่อ +1 · <b>ขวา</b> คนถัดไป +1 (วนรอบ) · นับเฉพาะคนที่ออนไลน์</li>
+          <li><b>หมดวง</b> ทุกคนที่ออนไลน์ +1</li>
+          <li><b>ชี้ · ลากเพื่อน · ข้ามตา · บัดดี้</b> คนจั่วกดปุ่ม “เลือก” ที่ชื่อคนรับผล (บัดดี้: คนจั่วดื่มเมื่อไหร่ บัดดี้ +1 ตามให้เอง)</li>
+          <li><b>รอด · ส่งต่อบทลงโทษ · ผู้คุมเกม</b> เจ้าของกดปุ่ม “ใช้” ที่ชื่อตัวเอง ระบบปรับเป้กให้</li>
+        </ul>
+        <p><b>ต้องกดเอง</b> (กด + เป้ก ที่ชื่อคนนั้น กด − ถ้ากดพลาด)</p>
+        <ul>
+          <li><b>หมวดหมู่ · เสียงสัตว์ · แตะจมูก</b> ใครตอบไม่ได้ ซ้ำ หรือช้าสุด</li>
+          <li><b>ไพ่สถานะ</b> (ห้ามมีฟัน ห้ามคุย ห้ามหัวเราะ ห้ามชี้ ฯลฯ) เมื่อมีคนทำผิดกฎ</li>
+        </ul>
+        <p class="hwarn"><b>ข้อควรระวัง</b> ถ้าคนจั่ว ชี้ · ลากเพื่อน · ข้ามตา · บัดดี้ แล้วไม่กดเลือก ผลจะยังไม่ถูกนับ และเมื่อมีคนจั่วใบถัดไป ปุ่ม “เลือก” จะหายไป (ผลของใบนั้นเป็นอันไม่นับ ต้องกด + เป้ก เอง)</p>
+        <p class="hnote">ถ้าผลไม่ตรง ผู้คุมเกมยกเลิกผลใบล่าสุดได้ หรือกด − แก้ที่ชื่อคนนั้น</p>
+      </details>
     </div>
   </div>
 
