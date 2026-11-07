@@ -12,7 +12,10 @@ const STATUS_CARDS = new Set(["11", "13", "14", "15", "16", "17", "22", "23", "2
 const HOLD_CARDS = new Set(["8", "10", "19", "R1"]);
 const RULE_CARDS = new Set(["12", "18"]);
 
-const defaults = () => Object.fromEntries(IDS.map((id) => [id, id.startsWith("R") ? 1 : 2]));
+// จำนวนใบเริ่มต้นของแต่ละแบบ เรียงตาม IDS (1..25, R1, R2)
+const DEFAULT_DIGITS = "734412241111111111222111211";
+const defaults = () => Object.fromEntries(IDS.map((id, i) => [id, Number(DEFAULT_DIGITS[i])]));
+const OLD_DEFAULTS = () => Object.fromEntries(IDS.map((id) => [id, id.startsWith("R") ? 1 : 2]));
 const sig = (counts) => IDS.map((id) => counts[id] || 0).join(",");
 const fresh = () => ({
   counts: defaults(), built: "", deck: [], drawn: [], cur: null, by: "", dir: 1, seq: 0, started: false,
@@ -39,6 +42,7 @@ export class Room extends DurableObject {
       const s = (await ctx.storage.get("s")) || fresh();
       // ห้องเก่าที่เซฟไว้ก่อนมีฟีเจอร์ใหม่
       for (const id of IDS) if (s.counts[id] == null) s.counts[id] = id.startsWith("R") ? 1 : 2;
+      if (!s.started && sig(s.counts) === sig(OLD_DEFAULTS())) s.counts = defaults();
       s.seats = s.seats || [];
       s.stat = s.stat || {};
       s.rules = s.rules || [];

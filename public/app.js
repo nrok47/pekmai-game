@@ -35,7 +35,8 @@
   ];
   var BYID = {}; CARDS.forEach(function (c) { BYID[c.id] = c; });
 
-  function defaults() { var o = {}; CARDS.forEach(function (c) { o[c.id] = c.rare ? 1 : 2; }); return o; }
+  var DEFAULT_DIGITS = '734412241111111111222111211'; // เรียงตาม CARDS (1..25, R1, R2)
+  function defaults() { var o = {}; CARDS.forEach(function (c, i) { o[c.id] = Number(DEFAULT_DIGITS.charAt(i)); }); return o; }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; }); }
   function $(id) { return document.getElementById(id); }
   function sig(counts) { return CARDS.map(function (c) { return counts[c.id] || 0; }).join(','); }
