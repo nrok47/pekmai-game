@@ -66,6 +66,55 @@
   }
   var BACK = '<div class="pcard"><img src="/cards/back.jpg" alt="หลังการ์ดเป้กไหม"></div>';
 
+
+  // ---------- สรุปผลแต่ละใบ ----------
+  function aggLines(lines) {
+    var agg = {}, order = [];
+    (lines || []).forEach(function (l) {
+      if (!agg[l.id]) { agg[l.id] = { name: l.name, n: 0 }; order.push(l.id); }
+      agg[l.id].n += l.n;
+    });
+    return order.map(function (k) { return agg[k]; }).filter(function (x) { return x.n !== 0; });
+  }
+  function aggLines2(lines) {
+    var agg = {};
+    (lines || []).forEach(function (l) { agg[l.id] = agg[l.id] || { id: l.id, n: 0 }; agg[l.id].n += l.n; });
+    return Object.keys(agg).map(function (k) { return agg[k]; }).filter(function (x) { return x.n !== 0; });
+  }
+  function fmtLines(lines) {
+    return aggLines(lines).map(function (x) { return x.name + ' ' + (x.n > 0 ? '+' : '') + x.n + ' เป้ก'; }).join(', ');
+  }
+  function seatName(id) { var p = state && state.seats.filter(function (q) { return q.id === id; })[0]; return p ? p.name : '?'; }
+  var STATUS_IDS = { '11': 1, '13': 1, '14': 1, '15': 1, '16': 1, '17': 1, '22': 1, '23': 1, '24': 1 };
+  function evSummary(ev, s) {
+    var c = BYID[ev.c], t = c ? c.t : '';
+    var f = fmtLines(ev.lines);
+    if (ev.kind === 'manual') return 'แก้ตัวเลข: ' + f + ' (โดย ' + ev.by + ')';
+    if (ev.kind === 'use') {
+      if (ev.c === '8') return ev.by + ' ใช้ รอด → ' + (f || 'ไม่มีเป้กให้ลด');
+      if (ev.c === '19') return ev.by + ' ส่งต่อบทลงโทษ → ' + (f || '-');
+      if (ev.c === 'R1') return ev.by + ' ใช้ ผู้คุมเกม ยกเลิกใบ ' + (BYID[ev.targetCard] ? BYID[ev.targetCard].t : 'ล่าสุด') + (f ? ' (คืนเป้ก ' + f + ')' : '');
+      return ev.by + ' ใช้ ' + t;
+    }
+    var txt;
+    var pd = s && s.pending && s.pending.evId === ev.id ? s.pending : null;
+    if (ev.c === '20') txt = 'กลับทิศการวนตา';
+    else if (ev.c === 'R2') txt = 'ล้างกฎและสถานะทั้งหมด';
+    else if (ev.c === '12') txt = ev.by + ' ตั้งกฎใหม่ (ใช้จนจบเกม)';
+    else if (ev.c === '18') txt = ev.by + ' ตั้งคำลงท้าย (ใช้จนจบเกม)';
+    else if (STATUS_IDS[ev.c]) txt = ev.by + ' ติด “' + t + '” ถึงรอบหน้า';
+    else if (ev.c === '8' || ev.c === '10' || ev.c === '19' || ev.c === 'R1') txt = ev.by + ' เก็บ “' + t + '” ไว้ใช้';
+    else if (ev.c === '9' || ev.c === '25') txt = 'ใครตอบไม่ได้/ผิด ดื่ม — กด + เป้ก ที่ชื่อคนนั้น';
+    else if (ev.c === '7') txt = pd ? 'รอ ' + ev.by + ' เลือกบัดดี้' : ev.by + ' มีบัดดี้ ' + (ev.picks && ev.picks[0] ? ev.picks[0] : '-') + ' (ดื่มเมื่อไหร่ บัดดี้ดื่มด้วย)';
+    else if (f) txt = 'ใครดื่ม: ' + f;
+    else txt = '';
+    if (ev.c === '21' && ev.picks && ev.picks[0]) txt = (f ? 'ใครดื่ม: ' + f : ev.picks[0]) + ' · ' + ev.picks[0] + ' ข้ามตาถัดไป';
+    if ((ev.c === '2' || ev.c === '6' || ev.c === '21') && pd) txt = (f ? 'ใครดื่ม: ' + f + ' · ' : '') + 'รอ ' + ev.by + ' เลือกอีก ' + (pd.need - pd.picks.length) + ' คน';
+    if (ev.cancelled) txt += ' (ถูกยกเลิกโดยผู้คุมเกม)';
+    return txt;
+  }
+  var passMode = false;
+
   var ws = null, room = '', state = null, online = [], lastSeq = -1, retry = 0, closing = false;
 
   function setNet(text, on) { $('nettxt').textContent = text; $('netdot').className = 'dot' + (on ? ' on' : ''); }
@@ -117,6 +166,10 @@
     var seats = s ? s.seats : [];
     $('seatcount').textContent = online.length + '/' + seats.length + ' ออนไลน์';
     $('dir').textContent = started ? (s.dir === -1 ? 'ลำดับตา: ย้อนขึ้นไปด้านบน ↑' : 'ลำดับตา: ลงไปด้านล่าง ↓') : '';
+    var pendMine = !!(s && s.pending && s.pending.by === MYID);
+    var latest = s && s.events && s.events.length ? s.events[s.events.length - 1] : null;
+    var hitMap = {};
+    (latest ? aggLines2(latest.lines) : []).forEach(function (x) { hitMap[x.id] = x.n; });
     seats.forEach(function (p) {
       var st = (s && s.stat && s.stat[p.id]) || { drinks: 0, lemon: 0, status: [], hold: [] };
       var on = isOn(p.id);
@@ -131,22 +184,26 @@
       var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name; nm.title = p.name;
       top.appendChild(av); top.appendChild(nm);
       if (isNow) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'ตานี้'; top.appendChild(tg); }
+      if ((pendMine && !mine && on && s.pending.picks.indexOf(p.id) < 0) || (passMode && !mine && on)) {
+        var pk = document.createElement('button'); pk.type = 'button'; pk.className = 'pick'; pk.textContent = 'เลือก';
+        pk.setAttribute('data-pick', p.id); pk.setAttribute('aria-label', 'เลือก ' + p.name); top.appendChild(pk);
+      }
       if (!on && !mine) {
         var x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×';
         x.setAttribute('aria-label', 'เอา ' + p.name + ' ออกจากห้อง'); x.setAttribute('data-remove', p.id); top.appendChild(x);
       }
       el.appendChild(top);
       var cnts = document.createElement('div'); cnts.className = 'cnts';
-      [['drinks', 'เหล้า', 'drink'], ['lemon', 'มะนาว', 'lemon']].forEach(function (k) {
-        var b = document.createElement('span'); b.className = 'cnt';
-        var lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = k[1];
-        var num = document.createElement('b'); num.textContent = st[k[0]] || 0;
-        var minus = document.createElement('button'); minus.type = 'button'; minus.textContent = '−';
-        minus.setAttribute('data-drink', p.id + ':' + k[2] + ':-1'); minus.setAttribute('aria-label', 'ลด' + k[1] + ' ' + p.name);
-        var plus = document.createElement('button'); plus.type = 'button'; plus.textContent = '+';
-        plus.setAttribute('data-drink', p.id + ':' + k[2] + ':1'); plus.setAttribute('aria-label', 'เพิ่ม' + k[1] + ' ' + p.name);
-        b.appendChild(lab); b.appendChild(minus); b.appendChild(num); b.appendChild(plus); cnts.appendChild(b);
-      });
+      var cb = document.createElement('span'); cb.className = 'cnt';
+      var lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = 'เป้ก';
+      var num = document.createElement('b'); num.textContent = st.drinks || 0;
+      var minus = document.createElement('button'); minus.type = 'button'; minus.textContent = '−';
+      minus.setAttribute('data-drink', p.id + ':drink:-1'); minus.setAttribute('aria-label', 'ลดเป้ก ' + p.name);
+      var plus = document.createElement('button'); plus.type = 'button'; plus.textContent = '+';
+      plus.setAttribute('data-drink', p.id + ':drink:1'); plus.setAttribute('aria-label', 'เพิ่มเป้ก ' + p.name);
+      cb.appendChild(lab); cb.appendChild(minus); cb.appendChild(num); cb.appendChild(plus); cnts.appendChild(cb);
+      var hitN = hitMap[p.id];
+      if (hitN) { var hit = document.createElement('span'); hit.className = 'hit' + (hitN < 0 ? ' neg' : ''); hit.textContent = (hitN > 0 ? '+' : '') + hitN + ' เป้ก'; cnts.appendChild(hit); }
       el.appendChild(cnts);
       var chips = document.createElement('div'); chips.className = 'chips';
       (st.status || []).forEach(function (cid) {
@@ -172,15 +229,48 @@
     sk.textContent = myTurn ? 'ข้ามตาฉัน' : 'ข้าม ' + (turnSeat ? turnSeat.name : '') + ' (ไม่อยู่)';
 
     var h = $('hist'); h.innerHTML = '';
-    var drawn = s ? s.drawn.slice().reverse().slice(0, 8) : [];
-    $('hist-empty').hidden = drawn.length > 0;
-    drawn.forEach(function (e) {
-      var c = BYID[e.c]; if (!c) return;
+    var evs = s && s.events ? s.events.slice().reverse().slice(0, 12) : [];
+    $('hist-empty').hidden = evs.length > 0;
+    evs.forEach(function (e) {
+      var c = BYID[e.c];
       var li = document.createElement('li');
-      var sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = c.rare ? COLORS.gold : COLORS[c.k];
-      var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = (c.rare ? '★ ' : c.id + ' ') + c.t;
-      var by = document.createElement('span'); by.className = 'by'; by.textContent = e.by || '';
+      var sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = e.kind === 'manual' ? '#888' : (c ? (c.rare ? COLORS.gold : COLORS[c.k]) : '#888');
+      var nm = document.createElement('span'); nm.className = 'nm';
+      nm.textContent = e.kind === 'manual' ? 'แก้เป้ก' : e.kind === 'use' ? 'ใช้ ' + (c ? c.t : '') : (c ? (c.rare ? '★ ' : c.id + ' ') + c.t : '');
+      var by = document.createElement('span'); by.className = 'by';
+      by.textContent = (e.kind === 'draw' ? e.by + ' · ' : '') + evSummary(e, s);
       li.appendChild(sw); li.appendChild(nm); li.appendChild(by); h.appendChild(li);
+    });
+
+    // ผลของใบล่าสุด (กรอบใต้ไพ่)
+    var rEl = $('result');
+    var lastDraw = s && s.events ? s.events.slice().reverse().filter(function (e) { return e.kind === 'draw'; })[0] : null;
+    var msgs = [];
+    if (lastDraw) msgs.push(evSummary(lastDraw, s));
+    if (pendMine) msgs.push('เลือก ' + (s.pending.need - s.pending.picks.length) + ' คน: กดปุ่ม "เลือก" ที่ชื่อผู้เล่นฝั่งซ้าย');
+    if (passMode) msgs.push('เลือกเพื่อนที่จะรับบทลงโทษแทน: กดปุ่ม "เลือก" ที่ชื่อผู้เล่น');
+    rEl.hidden = msgs.length === 0 || !lastDraw;
+    rEl.innerHTML = '';
+    if (lastDraw) {
+      var h3 = document.createElement('div'); h3.className = 'rt';
+      h3.textContent = (BYID[lastDraw.c] ? BYID[lastDraw.c].t : '') + ' · ผลใบนี้';
+      rEl.appendChild(h3);
+      msgs.forEach(function (m, i) { var d = document.createElement('div'); d.className = i ? 'rn' : 'rb'; d.textContent = m; rEl.appendChild(d); });
+    }
+
+    // ใครโดนเยอะ
+    var bd = $('board'); bd.innerHTML = '';
+    var ranked = seats.map(function (p) { return { p: p, n: ((s && s.stat && s.stat[p.id]) || {}).drinks || 0 }; }).sort(function (a, b) { return b.n - a.n; });
+    var maxN = ranked.length ? ranked[0].n : 0;
+    $('board-empty').hidden = maxN > 0;
+    if (maxN > 0) ranked.forEach(function (r, i) {
+      var row = document.createElement('div'); row.className = 'brow';
+      var nmEl = document.createElement('span'); nmEl.className = 'bn'; nmEl.textContent = r.p.name + (i === 0 && r.n > 0 && ranked.filter(function (q) { return q.n === maxN; }).length === 1 ? ' · โดนเยอะสุด' : '');
+      var bar = document.createElement('span'); bar.className = 'bar';
+      var fill = document.createElement('span'); fill.className = 'fill'; fill.style.width = (maxN ? Math.round(r.n / maxN * 100) : 0) + '%'; fill.style.background = avatarColor(r.p.id);
+      bar.appendChild(fill);
+      var cn = document.createElement('b'); cn.textContent = r.n;
+      row.appendChild(nmEl); row.appendChild(bar); row.appendChild(cn); bd.appendChild(row);
     });
 
     var rows = $('rows');
@@ -247,7 +337,17 @@
       var q = t.getAttribute('data-drink').split(':');
       send({ type: 'drink', target: q[0], kind: q[1], delta: +q[2] }); return;
     }
-    if (t.hasAttribute('data-use')) send({ type: 'use', card: t.getAttribute('data-use') });
+    if (t.hasAttribute('data-pick')) {
+      var tg = t.getAttribute('data-pick');
+      if (passMode) { passMode = false; send({ type: 'use', card: '19', target: tg }); }
+      else send({ type: 'pick', target: tg });
+      render(); return;
+    }
+    if (t.hasAttribute('data-use')) {
+      var uc = t.getAttribute('data-use');
+      if (uc === '19') { passMode = !passMode; render(); return; }
+      send({ type: 'use', card: uc });
+    }
   });
   var rs = $('resetstats'), rsT = null;
   rs.addEventListener('click', function () {

@@ -6,6 +6,7 @@ for (let i = 1; i <= 25; i++) IDS.push(String(i));
 IDS.push("R1", "R2");
 const MAX_PER_CARD = 8;
 const MAX_SEATS = 12;
+const MAX_EVENTS = 60;
 // การ์ดที่ให้สถานะติดตัวคนจั่วจนถึงรอบหน้า / ของที่เก็บไว้ใช้ / กฎที่ใช้ทั้งเกม
 const STATUS_CARDS = new Set(["11", "13", "14", "15", "16", "17", "22", "23", "24"]);
 const HOLD_CARDS = new Set(["8", "10", "19", "R1"]);
@@ -15,7 +16,7 @@ const defaults = () => Object.fromEntries(IDS.map((id) => [id, id.startsWith("R"
 const sig = (counts) => IDS.map((id) => counts[id] || 0).join(",");
 const fresh = () => ({
   counts: defaults(), built: "", deck: [], drawn: [], cur: null, by: "", dir: 1, seq: 0, started: false,
-  seats: [], turnId: null, stat: {}, rules: [],
+  seats: [], turnId: null, stat: {}, rules: [], events: [], evId: 0, pending: null, buddy: {}, skip: {},
 });
 const cleanName = (s) => String(s || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 16);
 const cleanId = (s) => String(s || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
@@ -36,12 +37,18 @@ export class Room extends DurableObject {
     this.lastDraw = 0;
     ctx.blockConcurrencyWhile(async () => {
       const s = (await ctx.storage.get("s")) || fresh();
-      // ห้องเก่าที่เซฟไว้ก่อนมีการ์ดใหม่/ลำดับตา
+      // ห้องเก่าที่เซฟไว้ก่อนมีฟีเจอร์ใหม่
       for (const id of IDS) if (s.counts[id] == null) s.counts[id] = id.startsWith("R") ? 1 : 2;
       s.seats = s.seats || [];
       s.stat = s.stat || {};
       s.rules = s.rules || [];
+      s.events = s.events || [];
+      s.evId = s.evId || 0;
+      s.pending = s.pending || null;
+      s.buddy = s.buddy || {};
+      s.skip = s.skip || {};
       if (s.turnId === undefined) s.turnId = null;
+      for (const k of Object.keys(s.stat)) delete s.stat[k].lemon; // เลิกนับมะนาว
       this.s = s;
     });
   }
@@ -88,8 +95,37 @@ export class Room extends DurableObject {
   }
 
   statOf(id) {
-    const st = (this.s.stat[id] = this.s.stat[id] || { drinks: 0, lemon: 0, status: [], hold: [] });
-    return st;
+    return (this.s.stat[id] = this.s.stat[id] || { drinks: 0, status: [], hold: [] });
+  }
+
+  nameOf(id) {
+    const p = this.s.seats.find((x) => x.id === id);
+    return p ? p.name : "?";
+  }
+
+  // ผู้เล่นที่นั่งอยู่จริง (ออนไลน์) เรียงตามที่นั่ง — ใช้หาซ้าย/ขวา/ทุกคน
+  liveSeats() {
+    const online = new Set(this.onlineIds());
+    return this.s.seats.filter((p) => online.has(p.id));
+  }
+
+  // เพิ่ม/ลดเป้กของ id แล้วบันทึกลง lines (บัดดี้ดื่มตามด้วย)
+  addDrink(id, n, lines, noBuddy = false, via = null) {
+    const st = this.statOf(id);
+    const before = st.drinks;
+    st.drinks = Math.max(0, Math.min(99, before + n));
+    const real = st.drinks - before;
+    if (real !== 0) lines.push({ id, name: this.nameOf(id), n: real, ...(via ? { via } : {}) });
+    const b = this.s.buddy[id];
+    if (!noBuddy && real > 0 && b && b !== id && this.s.seats.some((p) => p.id === b)) this.addDrink(b, real, lines, true, id);
+  }
+
+  pushEvent(ev) {
+    const s = this.s;
+    ev.id = ++s.evId;
+    s.events.push(ev);
+    if (s.events.length > MAX_EVENTS) s.events = s.events.slice(-MAX_EVENTS);
+    return ev;
   }
 
   // ตาเป็นของ id: สถานะ "ถึงรอบหน้า" ของคนนั้นหมดอายุ
@@ -98,7 +134,7 @@ export class Room extends DurableObject {
     if (id && this.s.stat[id]) this.s.stat[id].status = [];
   }
 
-  // เลื่อนตาไปคนถัดไปที่ออนไลน์ ตามทิศปัจจุบัน
+  // เลื่อนตาไปคนถัดไปที่ออนไลน์ ตามทิศปัจจุบัน (ข้ามคนที่โดนข้ามตา)
   advanceTurn() {
     const s = this.s;
     const n = s.seats.length;
@@ -106,9 +142,13 @@ export class Room extends DurableObject {
     const online = new Set(this.onlineIds());
     let i = s.seats.findIndex((p) => p.id === s.turnId);
     if (i < 0) i = 0;
-    for (let k = 1; k <= n; k++) {
+    for (let k = 1; k <= n * 2; k++) {
       const j = (((i + k * s.dir) % n) + n) % n;
-      if (online.has(s.seats[j].id)) { this.setTurn(s.seats[j].id); return; }
+      const pid = s.seats[j].id;
+      if (!online.has(pid)) continue;
+      if (s.skip[pid]) { delete s.skip[pid]; continue; }
+      this.setTurn(pid);
+      return;
     }
   }
 
@@ -132,6 +172,32 @@ export class Room extends DurableObject {
     if (name) p.name = name;
     if (!p.name) p.name = "ผู้เล่น " + (s.seats.indexOf(p) + 1);
     return true;
+  }
+
+  // ผลอัตโนมัติของการ์ดที่จั่ว
+  applyCard(card, id, ev) {
+    const s = this.s;
+    const live = this.liveSeats();
+    const n = live.length;
+    const idx = live.findIndex((p) => p.id === id);
+    const others = live.filter((p) => p.id !== id);
+    s.pending = null;
+    if (card === "1") this.addDrink(id, 1, ev.lines);
+    else if (card === "3" && n) this.addDrink(live[(idx - 1 + n) % n].id, 1, ev.lines); // ซ้าย = คนก่อนหน้าในรายชื่อ
+    else if (card === "4" && n) this.addDrink(live[(idx + 1) % n].id, 1, ev.lines); // ขวา = คนถัดไปในรายชื่อ
+    else if (card === "5") for (const p of live) this.addDrink(p.id, 1, ev.lines);
+    else if (card === "2" && others.length) s.pending = { evId: ev.id, card, by: id, need: 1, picks: [], effect: "drink" };
+    else if (card === "6") {
+      this.addDrink(id, 1, ev.lines);
+      if (others.length) s.pending = { evId: ev.id, card, by: id, need: Math.min(2, others.length), picks: [], effect: "drink" };
+    } else if (card === "21" && others.length) s.pending = { evId: ev.id, card, by: id, need: 1, picks: [], effect: "skip" };
+    else if (card === "7" && others.length) s.pending = { evId: ev.id, card, by: id, need: 1, picks: [], effect: "buddy" };
+
+    const st = this.statOf(id);
+    if (STATUS_CARDS.has(card) && !st.status.includes(card)) { st.status.push(card); ev.statusAdded = { id, card }; }
+    if (HOLD_CARDS.has(card) && st.hold.length < 6) st.hold.push(card);
+    if (RULE_CARDS.has(card) && !s.rules.includes(card)) { s.rules.push(card); ev.ruleAdded = card; }
+    if (card === "R2") { s.rules = []; for (const k of Object.keys(s.stat)) s.stat[k].status = []; }
   }
 
   webSocketMessage(ws, raw) {
@@ -165,7 +231,10 @@ export class Room extends DurableObject {
     } else if (m.type === "shuffle") {
       const deck = shuffled(s.counts);
       if (!deck.length) return;
-      Object.assign(s, { deck, built: sig(s.counts), drawn: [], cur: null, by: "", dir: 1, started: true, seq: s.seq + 1, rules: [] });
+      Object.assign(s, {
+        deck, built: sig(s.counts), drawn: [], cur: null, by: "", dir: 1, started: true, seq: s.seq + 1,
+        rules: [], events: [], pending: null, buddy: {}, skip: {},
+      });
       for (const k of Object.keys(s.stat)) { s.stat[k].status = []; s.stat[k].hold = []; }
       this.setTurn(id);
       this.save();
@@ -182,27 +251,68 @@ export class Room extends DurableObject {
       s.by = me.name;
       s.seq += 1;
       if (card === "20") s.dir = s.dir === -1 ? 1 : -1;
-      const st = this.statOf(id);
-      if (STATUS_CARDS.has(card) && !st.status.includes(card)) st.status.push(card);
-      if (HOLD_CARDS.has(card) && st.hold.length < 6) st.hold.push(card);
-      if (RULE_CARDS.has(card) && !s.rules.includes(card)) s.rules.push(card);
-      if (card === "R2") { s.rules = []; for (const k of Object.keys(s.stat)) s.stat[k].status = []; }
+      const ev = this.pushEvent({ kind: "draw", c: card, by: me.name, byId: id, lines: [] });
+      this.applyCard(card, id, ev);
       this.advanceTurn();
       this.save();
+    } else if (m.type === "pick") {
+      // คนจั่วเลือกคนรับผล (ชี้ / ลากเพื่อน / บัดดี้ / ข้ามตา)
+      const pd = s.pending;
+      const target = cleanId(m.target);
+      const online = new Set(this.onlineIds());
+      if (!pd || pd.by !== id || target === id || pd.picks.includes(target) || !online.has(target)) return;
+      const ev = s.events.find((e) => e.id === pd.evId) || { lines: [] };
+      if (pd.effect === "drink" || pd.effect === "skip") this.addDrink(target, 1, ev.lines);
+      if (pd.effect === "skip") { s.skip[target] = true; (ev.skipped = ev.skipped || []).push(target); }
+      if (pd.effect === "buddy") { ev.buddyPrev = s.buddy[id] || null; s.buddy[id] = target; ev.buddyOf = id; }
+      pd.picks.push(target);
+      ev.picks = pd.picks.map((t) => this.nameOf(t));
+      if (pd.picks.length >= pd.need) s.pending = null;
+      this.save();
     } else if (m.type === "drink") {
+      // แก้ตัวเลขเป้กเอง (ใครกดให้ใครก็ได้) — บัดดี้ดื่มตามด้วย
       const target = cleanId(m.target);
       if (s.seats.some((p) => p.id === target)) {
-        const st = this.statOf(target);
-        const key = m.kind === "lemon" ? "lemon" : "drinks";
-        st[key] = Math.max(0, Math.min(99, st[key] + (m.delta === -1 ? -1 : 1)));
+        const lines = [];
+        this.addDrink(target, m.delta === -1 ? -1 : 1, lines);
+        if (lines.length) this.pushEvent({ kind: "manual", by: me.name, byId: id, lines });
         this.save();
       }
     } else if (m.type === "use") {
+      const card = String(m.card);
       const st = this.statOf(id);
-      const i = st.hold.indexOf(String(m.card));
-      if (i >= 0) { st.hold.splice(i, 1); this.save(); }
+      const i = st.hold.indexOf(card);
+      if (i < 0) return;
+      const lines = [];
+      let extra = {};
+      if (card === "8") this.addDrink(id, -1, lines, true); // รอด: ยกเลิกการดื่ม 1 ครั้ง
+      else if (card === "19") {
+        // ส่งต่อบทลงโทษ: ผมเอาออกจากตัวเอง 1 แล้วส่งให้เพื่อน
+        const target = cleanId(m.target);
+        const online = new Set(this.onlineIds());
+        if (!target || target === id || !online.has(target)) return;
+        this.addDrink(id, -1, lines, true);
+        this.addDrink(target, 1, lines);
+      } else if (card === "R1") {
+        // ผู้คุมเกม: ยกเลิกผลของการ์ดล่าสุดที่เปิด
+        const last = [...s.events].reverse().find((e) => e.kind === "draw" && !e.cancelled && e.c !== "R1");
+        if (last) {
+          for (const l of last.lines) { const st2 = this.statOf(l.id); st2.drinks = Math.max(0, st2.drinks - l.n); lines.push({ id: l.id, name: l.name, n: -l.n }); }
+          last.cancelled = true;
+          if (last.statusAdded) { const sd = this.statOf(last.statusAdded.id); sd.status = sd.status.filter((x) => x !== last.statusAdded.card); }
+          if (last.ruleAdded) s.rules = s.rules.filter((x) => x !== last.ruleAdded);
+          for (const t of last.skipped || []) delete s.skip[t];
+          if (last.buddyOf) { if (last.buddyPrev) s.buddy[last.buddyOf] = last.buddyPrev; else delete s.buddy[last.buddyOf]; }
+          if (s.pending && s.pending.evId === last.id) s.pending = null;
+          extra = { target: last.id, targetCard: last.c };
+        }
+      }
+      st.hold.splice(i, 1);
+      this.pushEvent({ kind: "use", c: card, by: me.name, byId: id, lines, ...extra });
+      this.save();
     } else if (m.type === "resetstats") {
-      for (const k of Object.keys(s.stat)) { s.stat[k].drinks = 0; s.stat[k].lemon = 0; }
+      for (const k of Object.keys(s.stat)) s.stat[k].drinks = 0;
+      s.events = [];
       this.save();
     } else if (m.type === "skip") {
       // ข้ามตา: เจ้าของตา หรือใครก็ได้ถ้าเจ้าของตาไม่อยู่
@@ -216,6 +326,8 @@ export class Room extends DurableObject {
         if (wasTurn) this.advanceTurn();
         s.seats = s.seats.filter((p) => p.id !== target);
         delete s.stat[target];
+        delete s.buddy[target];
+        delete s.skip[target];
         if (wasTurn && s.turnId === target) s.turnId = s.seats[0] ? s.seats[0].id : null;
         this.save();
       }

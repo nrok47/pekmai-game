@@ -89,6 +89,21 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; display: flex; align-items: c
 .sch.hold { background: #2F7D32; cursor: default; }
 button.sch.hold { cursor: pointer; }
 
+.result { width: 100%; max-width: 420px; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.25); border-radius: 12px; padding: 10px 14px; }
+.result .rt { font-size: 12px; color: rgba(255,255,255,.7); }
+.result .rb { font-size: 18px; font-weight: 700; color: #fff; overflow-wrap: anywhere; }
+.result .rn { font-size: 14px; color: #FFE9A8; margin-top: 4px; }
+.hit { font-size: 12px; font-weight: 700; background: #B3261E; color: #fff; border-radius: 999px; padding: 1px 8px; animation: hitpop .5s ease-out; }
+.hit.neg { background: #2F7D32; }
+@keyframes hitpop { from { transform: scale(1.5); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hit { animation: none; } }
+.pick { min-height: 28px; padding: 2px 10px; border-radius: 999px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12px; flex: none; }
+.lb .brow { display: grid; grid-template-columns: minmax(80px, 38%) 1fr 28px; gap: 10px; align-items: center; font-size: 14px; margin-bottom: 6px; }
+.lb .bn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb .bar { height: 12px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.lb .fill { display: block; height: 100%; border-radius: 999px; }
+.lb b { text-align: right; font-variant-numeric: tabular-nums; }
+
 .table {
   background: radial-gradient(ellipse at 50% 28%, var(--felt-hi), var(--felt) 70%);
   border: 1px solid rgba(0,0,0,.3); border-radius: 18px; padding: 16px; color: #F5F7EE;
@@ -211,10 +226,17 @@ details > summary { cursor: pointer; font-size: 18px; font-weight: 600; min-heig
         <div class="cardwrap" id="face"></div>
       </div>
       <div class="who" id="who-line" aria-live="polite"></div>
+      <div class="result" id="result" aria-live="polite" hidden></div>
       <button class="btn primary draw" id="draw" type="button">จั่ว</button>
       <div class="status" id="status"></div>
     </div>
   </div>
+
+  <section class="box">
+    <h2>ใครโดนเยอะ <span class="chip">นับเป้ก</span></h2>
+    <div class="lb" id="board"></div>
+    <p class="empty" id="board-empty">ยังไม่มีใครโดน</p>
+  </section>
 
   <section class="box">
     <h2>ใบที่เปิดไปแล้ว</h2>
